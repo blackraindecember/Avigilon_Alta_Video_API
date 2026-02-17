@@ -2,7 +2,6 @@ from wsgiref import headers
 
 import requests
 
-
 #about endpoint
 def about(base_url,va_cookie):
     url = f"{base_url}" + "/api/v1/about"
@@ -158,23 +157,30 @@ def post_countingAreas_reset(base_url, va_cookie, countingAreas_id):
     else:
         print("Reset failed")
         return False
-def get_countingAreas_csv(base_url, va_cookie, countingAreas_id,start_time, end_time):
-    url = f"{base_url}" + f"/api/v1/countingAreas/{countingAreas_id}/csv"
-    headers = {"cookie": f"va={va_cookie}", "accept": "application/json"}
-    params ={
+
+def get_countingAreas_csv(base_url, va_cookie, countingAreas_id, start_time, end_time, step):
+
+    url = f"{base_url}/api/v1/countingAreas/{countingAreas_id}/csv"
+
+    headers = {
+        "cookie": f"va={va_cookie}",
+        "accept": "application/json"
+    }
+
+    params = {
         "start": start_time,
         "end": end_time,
-        "step": 3600000,  # 1 giờ (ms)
+        "step": step,
         "cumulative_in_out_values": "false",
         "time_location": "Asia/Ho_Chi_Minh"
     }
-    responses = requests.get(url, headers=headers, params=params)
-    if responses.status_code == 200:
-        print("Get countingAreas csv OK:")
-        return responses.text
+
+    response = requests.get(url, headers=headers, params=params)
+
+    if response.status_code == 200:
+        return response.text
     else:
-        print("Get countingAreas csv failed")
-        print(f"Error code:{responses.status_code}")
+        raise Exception(f"CSV API failed: {response.status_code}")
 
 def get_countingAreas_json(base_url, va_cookie, countingAreas_id, start_time, end_time):
     url = f"{base_url}" + f"/api/v1/countingAreas/{countingAreas_id}/json"
