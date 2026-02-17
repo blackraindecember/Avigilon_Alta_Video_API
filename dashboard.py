@@ -17,94 +17,63 @@ from utils import (
 
 class AltaCountingDashboard:
 
-    # -------------------------------------------------
-    # INIT
-    # -------------------------------------------------
     def __init__(self, config):
 
         self.base_url = config["base_url"]
         self.username = config["username"]
         self.password = config["password"]
         self.code = config.get("code", "")
-        self.timezone = config.get("timezone", "Asia/Ho_Chi_Minh")
 
         self.va_cookie = None
         self.area_map = {}
 
-    # -------------------------------------------------
-    # CONNECTION
-    # -------------------------------------------------
-    def is_connected(self):
-        return self.va_cookie is not None
-
+    # =====================================================
+    # CONNECT
+    # =====================================================
     def connect(self):
-        try:
-            print("[INFO] Connecting to Alta...")
 
-            self.va_cookie = dologin(
-                self.base_url,
-                self.username,
-                self.password,
-                self.code
-            )
+        self.va_cookie = dologin(
+            self.base_url,
+            self.username,
+            self.password,
+            self.code
+        )
 
-            if not self.va_cookie:
-                raise Exception("Login failed")
+        if not self.va_cookie:
+            raise Exception("Login failed")
 
-            print("[INFO] Login successful")
+        print("[INFO] Connected successfully")
 
-        except Exception:
-            print("[ERROR] Connection failed")
-            traceback.print_exc()
-            raise
-
-    # -------------------------------------------------
+    # =====================================================
     # LOAD COUNTING AREAS
-    # -------------------------------------------------
+    # =====================================================
     def reload_areas(self):
 
-        if not self.is_connected():
+        if not self.va_cookie:
             raise Exception("Not connected")
 
-        try:
-            print("[INFO] Loading counting areas...")
+        response = get_countingAreas(self.base_url, self.va_cookie)
 
-            response = get_countingAreas(self.base_url, self.va_cookie)
+        if not response:
+            raise Exception("Failed to load counting areas")
 
-            if not response:
-                raise Exception("Session expired or API error")
+        self.area_map = map_counting_area_name_id(response)
 
-            self.area_map = map_counting_area_name_id(response)
+        print(f"[INFO] Loaded {len(self.area_map)} areas")
 
-            print(f"[INFO] Loaded {len(self.area_map)} counting areas")
+        return self.area_map
 
-            return self.area_map
-
-        except Exception:
-            print("[ERROR] Failed to load counting areas")
-            traceback.print_exc()
-            raise
-
-    # -------------------------------------------------
-    # LOAD DATAFRAME (PHÙ HỢP CSV CỦA BẠN)
-    # -------------------------------------------------
+    # =====================================================
+    # LOAD DATAFRAME
+    # =====================================================
     def get_dataframe(self, area_id, start, end,
                       hours=0, minutes=0, seconds=0):
 
         try:
-            print("[INFO] Preparing time range...")
+            start_iso = convert_to_iso(start)
+            end_iso = convert_to_iso(end)
 
-            start_iso = convert_to_iso(start, self.timezone)
-            end_iso = convert_to_iso(end, self.timezone)
-
-            print(f"[DEBUG] Start ISO: {start_iso}")
-            print(f"[DEBUG] End ISO:   {end_iso}")
-
-            step = build_step(hours=hours, minutes=minutes, seconds=seconds)
-
-            print(f"[DEBUG] Step (ms): {step}")
-
-            print("[INFO] Requesting CSV data...")
+            step = build_step(hours, minutes, seconds)
 
             csv_text = get_countingAreas_csv(
                 self.base_url,
@@ -117,46 +86,65 @@ class AltaCountingDashboard:
 
             df = pd.read_csv(StringIO(csv_text))
 
-            print(f"[DEBUG] Columns received: {df.columns.tolist()}")
-
-            # ---------------------------------------------------------
-            # CHUẨN HÓA CỘT THEO CSV DEPLOYMENT CỦA BẠN
-            # ---------------------------------------------------------
+            print("[DEBUG] Original columns:", df.columns.tolist())
 
             rename_map = {}
 
-            # Time column
+            # ==============================
+            # TIME
+            # ==============================
             if "Start time" in df.columns:
                 rename_map["Start time"] = "time"
-            elif "timestamp" in df.columns:
-                rename_map["timestamp"] = "time"
 
-            # People counts
-            if "People: total in crossings" in df.columns:
-                rename_map["People: total in crossings"] = "in"
+            # ==============================
+            # SMART RENAME PEOPLE
+            # ==============================
+            for col in df.columns:
 
-            if "People: total out crossings" in df.columns:
-                rename_map["People: total out crossings"] = "out"
+                col_lower = col.lower()
 
-            # Vehicle counts (optional)
-            if "Vehicles: total in crossings" in df.columns:
-                rename_map["Vehicles: total in crossings"] = "vehicle_in"
+                # Crossing IN
+                if "people" in col_lower and "in crossings" in col_lower:
+                    rename_map[col] = "in"
 
-            if "Vehicles: total out crossings" in df.columns:
-                rename_map["Vehicles: total out crossings"] = "vehicle_out"
+                # Crossing OUT
+                elif "people" in col_lower and "out crossings" in col_lower:
+                    rename_map[col] = "out"
+
+                # Occupancy MAX
+                elif "people" in col_lower and "max" in col_lower:
+                    rename_map[col] = "occupancy_max"
+
+                # Occupancy MIN
+                elif "people" in col_lower and "min" in col_lower:
+                    rename_map[col] = "occupancy_min"
+
+                # Vehicle IN
+                elif "vehicles" in col_lower and "in crossings" in col_lower:
+                    rename_map[col] = "vehicle_in"
+
+                # Vehicle OUT
+                elif "vehicles" in col_lower and "out crossings" in col_lower:
+                    rename_map[col] = "vehicle_out"
+
+                # Vehicle MAX
+                elif "vehicles" in col_lower and "max" in col_lower:
+                    rename_map[col] = "vehicle_occupancy_max"
+
+                # Vehicle MIN
+                elif "vehicles" in col_lower and "min" in col_lower:
+                    rename_map[col] = "vehicle_occupancy_min"
 
             df.rename(columns=rename_map, inplace=True)
 
-            print(f"[DEBUG] Columns after rename: {df.columns.tolist()}")
+            print("[DEBUG] Columns after rename:", df.columns.tolist())
 
             if "time" not in df.columns:
-                raise Exception("No usable time column found in CSV")
-
-            print("[INFO] DataFrame ready")
+                raise Exception("No time column found in CSV")
 
             return df
 
         except Exception:
-            print("[ERROR] Failed to get dataframe")
+            print("[ERROR] Failed to build DataFrame")
             traceback.print_exc()
             raise
