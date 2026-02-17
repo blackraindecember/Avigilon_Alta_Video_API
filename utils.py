@@ -1,5 +1,7 @@
 import json
 import datetime
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 def beautify_json(json_text: str, indent: int = 4) -> str:
     try:
@@ -55,4 +57,60 @@ def map_counting_area_name_id(response_text: str) -> dict:
             temp[name] = area_id
 
     return temp
+
+def convert_to_iso(user_time: str, input_timezone: str = "UTC", output_as_utc: bool = True) -> str:
+    """
+    Convert time from:
+        YY-MM-DD/HH-MM-SS
+
+    Parameters:
+        user_time (str): Time string
+        input_timezone (str): Timezone of input (e.g., "UTC", "Asia/Ho_Chi_Minh")
+        output_as_utc (bool):
+            True  -> convert to UTC and return Z format
+            False -> keep original timezone offset
+
+    Returns:
+        ISO formatted string
+    """
+
+    try:
+        # Parse time string
+        dt = datetime.strptime(user_time, "%y-%m-%d/%H-%M-%S")
+
+        # Attach timezone
+        dt = dt.replace(tzinfo=ZoneInfo(input_timezone))
+
+        if output_as_utc:
+            dt = dt.astimezone(ZoneInfo("UTC"))
+            return dt.isoformat().replace("+00:00", "Z")
+        else:
+            return dt.isoformat()
+
+    except Exception as e:
+        return f"Invalid input: {e}"
+
+def build_step(hours: int = 0, minutes: int = 0, seconds: int = 0) -> int:
+    """
+    Convert hours/minutes/seconds to milliseconds (step value for counting CSV API)
+
+    Max allowed: 24 hours (86400000 ms)
+    """
+
+    total_ms = (
+        hours * 3600 * 1000 +
+        minutes * 60 * 1000 +
+        seconds * 1000
+    )
+
+    max_ms = 24 * 3600 * 1000  # 86400000
+
+    if total_ms <= 0:
+        raise ValueError("Step must be greater than 0")
+
+    if total_ms > max_ms:
+        raise ValueError("Step cannot exceed 24 hours (86400000 ms)")
+
+    return total_ms
+
 

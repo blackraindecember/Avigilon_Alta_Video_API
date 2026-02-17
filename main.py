@@ -20,11 +20,13 @@ va_cookie = dologin(base_url, username, password, code)
 print(va_cookie)
 
 
-mapid = map_counting_area_name_id(get_countingAreas(base_url,va_cookie))
-print(beautify_json_v1(mapid))
+#mapid = map_counting_area_name_id(get_countingAreas(base_url,va_cookie))
+#print(beautify_json_v1(mapid))
 #print(beautify_json(get_countingAreas_id(base_url,va_cookie,"5919b60d-aaa5-4c05-a404-125cc9996b7e")))
 #print(beautify_json(get_countingAreas_id_count(base_url,va_cookie,"5919b60d-aaa5-4c05-a404-125cc9996b7e")))
 #print(beautify_json(get_countingAreas_count_log(base_url,va_cookie,"5919b60d-aaa5-4c05-a404-125cc9996b7e")))
 
+print(convert_to_iso("26-02-17/13-00-00","Asia/Ho_Chi_Minh"))
+
 logout = logout(va_cookie, base_url)
-#=======================================================================================================================
+#============================================================================================================= ==========
